@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { TabProps } from './App';
 import {
-  allSlots, autoAssign, candidateOrder, countAssigned, csvText, fmtDate, isWork, lineText, now,
+  allSlots, autoAssign, candidateOrder, countAssigned, fmtDate, isWork, now,
   parseMembers, slotIds, slotKey, slotRoles, slotStatus, slotTime, stdNeed, uid,
 } from './logic';
-import { CopyFallback, Koma, MARK_TEXT } from './parts';
+import { downloadShiftXlsx } from './exportXlsx';
+import { Koma, MARK_TEXT } from './parts';
 import { deleteEntry, saveAssignment, saveConfig, saveEntries } from './store';
 import type { Assignment, Config, Day, Slot } from './types';
 
@@ -22,7 +23,6 @@ export function AdminTab(props: TabProps) {
   const { config, entries, assignment } = data;
   const [section, setSection] = useState<SectionId>('assign');
   const [confirmClear, setConfirmClear] = useState(false);
-  const [fallback, setFallback] = useState('');
 
   const valid = new Set(entries.map((e) => e.id));
 
@@ -59,12 +59,11 @@ export function AdminTab(props: TabProps) {
     if (await saveAsg({ ...assignment, map: {} })) toast('割当をすべて消しました');
   };
 
-  const copy = async (text: string, label: string) => {
+  const download = async () => {
     try {
-      await navigator.clipboard.writeText(text);
-      toast(`${label}をコピーしました`);
+      await downloadShiftXlsx(config, assignment, entries);
     } catch {
-      setFallback(text);
+      toast('ダウンロードできませんでした');
     }
   };
 
@@ -88,8 +87,7 @@ export function AdminTab(props: TabProps) {
         <div className="btns">
           <button className="btn primary" onClick={runAuto}>空きを自動で埋める</button>
           <button className="btn" onClick={togglePublish}>{assignment.published ? '公開を取り消す' : 'シフト表を公開'}</button>
-          <button className="btn" onClick={() => copy(lineText(config, assignment, entries), 'LINE用テキスト')}>LINE用にコピー</button>
-          <button className="btn" onClick={() => copy(csvText(config, assignment, entries), 'CSV')}>CSVをコピー</button>
+          <button className="btn" onClick={download}>シフト表をダウンロード(Excel)</button>
           <button className="btn danger" onClick={() => setConfirmClear(true)}>割当をすべてクリア</button>
         </div>
         {confirmClear && (
@@ -99,7 +97,6 @@ export function AdminTab(props: TabProps) {
             <button className="btn" onClick={() => setConfirmClear(false)}>やめる</button>
           </div>
         )}
-        {fallback && <CopyFallback text={fallback} onClose={() => setFallback('')} />}
         <p className="small muted">自動割当は ○ の人を優先し、担当コマ数が少ない人から順に入れます。すでに入っている割当は変えません。</p>
       </section>
 

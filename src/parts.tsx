@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { dayTitle, slotKey, slotTime } from './logic';
 import type { Day, Mark } from './types';
 
@@ -54,18 +53,5 @@ export function DayGrid({
         })}
       </div>
     </section>
-  );
-}
-
-/** クリップボードに書き込めなかったときの全文表示 */
-export function CopyFallback({ text, onClose }: { text: string; onClose: () => void }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, [text]);
-  return (
-    <div className="notice">
-      <p className="small">自動でコピーできませんでした。下の全文を選択してコピーしてください。</p>
-      <textarea ref={ref} className="copybox" readOnly value={text} rows={10} />
-      <button className="btn" onClick={onClose}>閉じる</button>
-    </div>
   );
 }
