@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { TabProps } from './App';
 import {
-  allSlots, autoAssign, candidateOrder, countAssigned, fmtDate, isWork, now,
+  allSlots, autoAssign, candidateOrder, countAssigned, fmtDate, fmtTime, isWork, now,
   parseMembers, slotIds, slotKey, slotRoles, slotStatus, slotTime, stdNeed, uid,
 } from './logic';
 import { downloadShiftXlsx } from './exportXlsx';
@@ -10,7 +10,8 @@ import { deleteEntry, saveAssignment, saveConfig, saveEntries } from './store';
 import type { Assignment, Config, Day, Slot } from './types';
 
 const SECTIONS = [
-  { id: 'assign', label: '割当' },
+  { id: 'matrix', label: '一覧で割当' },
+  { id: 'assign', label: '枠ごとに割当' },
   { id: 'members', label: 'メンバー' },
   { id: 'settings', label: '日程・時間枠・人数' },
 ] as const;
@@ -21,7 +22,7 @@ const FAIL = '保存できませんでした。もう一度お試しください
 export function AdminTab(props: TabProps) {
   const { data, patch, toast, reload } = props;
   const { config, entries, assignment } = data;
-  const [section, setSection] = useState<SectionId>('assign');
+  const [section, setSection] = useState<SectionId>('matrix');
   const [confirmClear, setConfirmClear] = useState(false);
 
   const valid = new Set(entries.map((e) => e.id));
@@ -106,6 +107,7 @@ export function AdminTab(props: TabProps) {
         ))}
       </nav>
 
+      {section === 'matrix' && <MatrixSection {...props} saveAsg={saveAsg} />}
       {section === 'assign' && <AssignSection {...props} saveAsg={saveAsg} saveCfg={saveCfg} />}
       {section === 'members' && <MembersSection {...props} saveAsg={saveAsg} />}
       {section === 'settings' && <SettingsSection {...props} />}
@@ -114,6 +116,98 @@ export function AdminTab(props: TabProps) {
 }
 
 type SaveAsg = (a: Omit<Assignment, 'updatedAt'>) => Promise<boolean>;
+
+// ---------------- 一覧で割当(人 × 枠) ----------------
+function MatrixSection({ data, saveAsg }: TabProps & { saveAsg: SaveAsg }) {
+  const { config, entries, assignment } = data;
+  const valid = new Set(entries.map((e) => e.id));
+  const counts = countAssigned(config, assignment, entries);
+  const refs = allSlots(config);
+
+  // 名簿の順に並べ、名簿にない人は後ろへ
+  const order = (n: string) => {
+    const i = config.members.indexOf(n);
+    return i < 0 ? Infinity : i;
+  };
+  const rows = [...entries].sort((x, y) => order(x.name) - order(y.name));
+
+  const toggle = (key: string, entryId: string) => {
+    const ref = refs.find((r) => r.key === key)!;
+    const slotMap = { ...assignment.map[key] };
+    if (slotIds(assignment, key, valid).includes(entryId)) {
+      for (const r of Object.keys(slotMap)) slotMap[r] = slotMap[r].filter((x) => x !== entryId);
+    } else {
+      const sts = slotStatus(config, assignment, ref, valid);
+      const target = sts.find((r) => r.short > 0) ?? sts[0];
+      if (!target) return;
+      slotMap[target.role.id] = [...target.ids, entryId];
+    }
+    saveAsg({ ...assignment, map: { ...assignment.map, [key]: slotMap } });
+  };
+
+  if (!entries.length) return <p className="muted">まだ誰も登録していません。</p>;
+
+  return (
+    <section>
+      <p className="small muted">
+        ○△のマスをタップすると割り当て、もう一度タップすると外します。<span className="mx-sample on">○</span> が割当済み、<span className="mx-sample bad">!</span> は ○△ を付けていないのに割り当てられている枠です。
+      </p>
+      <div className="scroll matrix-wrap">
+        <table className="matrix">
+          <thead>
+            <tr>
+              <th rowSpan={3} className="mx-name">名前</th>
+              {config.days.map((d) => d.slots.length > 0 && (
+                <th key={d.id} colSpan={d.slots.length} className="mx-day">{fmtDate(d.date)}</th>
+              ))}
+              <th rowSpan={3} className="mx-count">担当</th>
+            </tr>
+            <tr>
+              {refs.map(({ slot, key }) => (
+                <th key={key} className="mx-slot">
+                  {slot.name ? <span className="mx-work">{slot.name}</span> : <>{fmtTime(slot.start)}<br />{fmtTime(slot.end)}</>}
+                </th>
+              ))}
+            </tr>
+            <tr>
+              {refs.map((ref) => {
+                const sts = slotStatus(config, assignment, ref, valid);
+                const got = sts.reduce((n, r) => n + r.ids.length, 0);
+                const need = sts.reduce((n, r) => n + r.role.need, 0);
+                return <th key={ref.key} className={got >= need ? 'mx-fill ok' : 'mx-fill short'}>{got}/{need}</th>;
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((e) => (
+              <tr key={e.id}>
+                <th className="mx-name">{e.name}</th>
+                {refs.map(({ key, slot }) => {
+                  const m = e.avail[key];
+                  const on = slotIds(assignment, key, valid).includes(e.id);
+                  return (
+                    <td key={key} className="mx-td">
+                      <button
+                        className={`mx-cell ${m ?? 'none'}${on ? ' on' : ''}`}
+                        disabled={!m && !on}
+                        aria-pressed={on}
+                        aria-label={`${e.name} ${slotTime(slot)}`}
+                        onClick={() => toggle(key, e.id)}
+                      >
+                        {m ? MARK_TEXT[m] : on ? '!' : ''}
+                      </button>
+                    </td>
+                  );
+                })}
+                <td className="mx-count num">{counts[e.id]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 // ---------------- 割当 ----------------
 function AssignSection({ data, saveAsg, saveCfg }: TabProps & { saveAsg: SaveAsg; saveCfg: (c: Config) => Promise<boolean> }) {
