@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { TabProps } from './App';
-import { ME_KEY, fmtStamp, lsGet, lsSet, now, slotKey, uid } from './logic';
+import { fmtStamp, now, slotKey, uid } from './logic';
 import { DayGrid } from './parts';
 import { findEntryByName, saveEntries } from './store';
 import type { Entry, Mark } from './types';
@@ -18,10 +18,7 @@ export function RegisterTab({ data, patch, toast }: TabProps) {
     return names;
   }, [config.members, entries]);
 
-  const [sel, setSel] = useState(() => {
-    const n = lsGet(ME_KEY);
-    return n && options.includes(n) ? n : '';
-  });
+  const [sel, setSel] = useState('');
   const [typed, setTyped] = useState('');
   const [draft, setDraft] = useState<Record<string, Mark>>({});
   const [editing, setEditing] = useState(false);
@@ -39,16 +36,11 @@ export function RegisterTab({ data, patch, toast }: TabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadKey]);
 
-  const choose = (v: string) => {
-    setSel(v);
-    if (v !== OTHER) lsSet(ME_KEY, v);
-  };
-
   // 入力した名前がすでに登録済みなら、その人の登録内容を表示する
   const resolveTyped = () => {
     const n = typed.trim();
     if (n && options.includes(n)) {
-      choose(n);
+      setSel(n);
       setTyped('');
     }
   };
@@ -90,7 +82,7 @@ export function RegisterTab({ data, patch, toast }: TabProps) {
       const existing = await findEntryByName(name);
       if (existing) {
         putEntry(existing);
-        choose(name);
+        setSel(name);
         setTyped('');
         toast('この名前はすでに登録されています。登録内容を表示しました');
         return;
@@ -98,7 +90,7 @@ export function RegisterTab({ data, patch, toast }: TabProps) {
       const e: Entry = { id: uid(), name, avail: draft, updatedAt: now() };
       await saveEntries([e]);
       putEntry(e);
-      choose(name);
+      setSel(name);
       setTyped('');
       toast('登録しました');
     } catch {
@@ -132,7 +124,7 @@ export function RegisterTab({ data, patch, toast }: TabProps) {
     <div className="panel">
       <label className="field">
         <span className="label">自分の名前を選んでください</span>
-        <select value={sel} disabled={!!entry} onChange={(e) => choose(e.target.value)}>
+        <select value={sel} disabled={!!entry} onChange={(e) => setSel(e.target.value)}>
           <option value="">(選んでください)</option>
           {options.map((n) => (
             <option key={n} value={n}>
@@ -143,7 +135,7 @@ export function RegisterTab({ data, patch, toast }: TabProps) {
         </select>
       </label>
       {entry && !editing && (
-        <button className="link small" onClick={() => choose('')}>別の名前を選ぶ</button>
+        <button className="link small" onClick={() => setSel('')}>別の名前を選ぶ</button>
       )}
 
       {sel === OTHER && (

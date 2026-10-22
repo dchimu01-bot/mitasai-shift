@@ -5,15 +5,6 @@ export const now = () => new Date().toISOString();
 
 export const slotKey = (dayId: string, slotId: string) => `${dayId}__${slotId}`;
 
-// ---- ブラウザに覚えておく値 ----
-export const ME_KEY = 'mitasai-shift:me';
-export function lsGet(k: string): string | null {
-  try { return localStorage.getItem(k); } catch { return null; }
-}
-export function lsSet(k: string, v: string) {
-  try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch { /* 使えなくても動く */ }
-}
-
 // ---- 表記 ----
 const WD = '日月火水木金土';
 export function fmtDate(iso: string) {

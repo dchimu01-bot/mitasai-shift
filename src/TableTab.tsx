@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { TabProps } from './App';
-import { ME_KEY, allSlots, dayTitle, lsGet, lsSet, slotKey, slotStatus, slotTime } from './logic';
+import { allSlots, dayTitle, slotKey, slotStatus, slotTime } from './logic';
 import { Koma } from './parts';
 
 export function TableTab({ data }: TabProps) {
@@ -8,7 +8,7 @@ export function TableTab({ data }: TabProps) {
   const valid = new Set(entries.map((e) => e.id));
   const nameOf = new Map(entries.map((e) => [e.id, e.name]));
 
-  const [me, setMe] = useState(() => lsGet(ME_KEY) ?? '');
+  const [me, setMe] = useState('');
   const meEntry = entries.find((e) => e.name === me);
 
   const mine = meEntry
@@ -19,7 +19,7 @@ export function TableTab({ data }: TabProps) {
     <div className="panel">
       <label className="field">
         <span className="label">自分の名前</span>
-        <select value={meEntry ? me : ''} onChange={(e) => { setMe(e.target.value); lsSet(ME_KEY, e.target.value); }}>
+        <select value={meEntry ? me : ''} onChange={(e) => setMe(e.target.value)}>
           <option value="">(選ぶと自分のシフトを強調表示します)</option>
           {entries.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
         </select>

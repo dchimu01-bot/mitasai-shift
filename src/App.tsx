@@ -19,15 +19,10 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
-const tabFromHash = (): TabId => {
-  const h = location.hash.slice(1);
-  return TABS.some((t) => t.id === h) ? (h as TabId) : 'register';
-};
-
 export default function App() {
   const [data, setData] = useState<Data | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [tab, setTab] = useState<TabId>(tabFromHash);
+  const [tab, setTab] = useState<TabId>('register');
   const [toastMsg, setToastMsg] = useState('');
   const toastTimer = useRef<number>(undefined);
 
@@ -60,23 +55,15 @@ export default function App() {
   }, [tab, reload]);
   useEffect(() => {
     const onVis = () => { if (document.visibilityState === 'visible') reload(); };
-    const onHash = () => setTab(tabFromHash());
     document.addEventListener('visibilitychange', onVis);
-    window.addEventListener('hashchange', onHash);
     return () => {
       document.removeEventListener('visibilitychange', onVis);
-      window.removeEventListener('hashchange', onHash);
     };
   }, [reload]);
 
   useEffect(() => {
     if (data) document.title = data.config.title;
   }, [data]);
-
-  const choose = (id: TabId) => {
-    history.replaceState(null, '', id === 'register' ? location.pathname : `#${id}`);
-    setTab(id);
-  };
 
   const props = data && { data, patch, toast, reload };
 
@@ -87,7 +74,7 @@ export default function App() {
         <p className="sub">慶應義塾大学 将棋研究会 ・ 三田祭 対局企画</p>
         <nav className="tabs" role="tablist">
           {TABS.map((t) => (
-            <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'tab on' : 'tab'} onClick={() => choose(t.id)}>
+            <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'tab on' : 'tab'} onClick={() => setTab(t.id)}>
               {t.label}
             </button>
           ))}
