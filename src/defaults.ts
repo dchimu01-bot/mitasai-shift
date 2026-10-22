@@ -26,4 +26,4 @@ export const DEFAULT_CONFIG: Config = {
   updatedAt: '',
 };
 
-export const EMPTY_ASSIGNMENT: Assignment = { published: false, map: {}, updatedAt: '' };
+export const EMPTY_ASSIGNMENT: Assignment = { map: {}, updatedAt: '' };

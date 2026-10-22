@@ -28,7 +28,6 @@ export type Entry = {
 };
 
 export type Assignment = {
-  published: boolean;
   map: Record<string, Record<string, string[]>>; // slotKey -> roleId -> entryId[]
   updatedAt: string;
 };

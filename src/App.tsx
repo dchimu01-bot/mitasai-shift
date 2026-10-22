@@ -52,6 +52,12 @@ export default function App() {
 
   // 開いたとき・タブを切り替えたとき・画面に戻ってきたときに読み直す
   useEffect(() => { reload(); }, [tab, reload]);
+  // シフト表を開いたままでも、管理画面での変更が届くように定期的に読み直す
+  useEffect(() => {
+    if (tab !== 'table') return;
+    const t = window.setInterval(() => { if (document.visibilityState === 'visible') reload(); }, 20000);
+    return () => clearInterval(t);
+  }, [tab, reload]);
   useEffect(() => {
     const onVis = () => { if (document.visibilityState === 'visible') reload(); };
     const onHash = () => setTab(tabFromHash());

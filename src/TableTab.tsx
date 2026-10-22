@@ -11,39 +11,6 @@ export function TableTab({ data }: TabProps) {
   const [me, setMe] = useState(() => lsGet(ME_KEY) ?? '');
   const meEntry = entries.find((e) => e.name === me);
 
-  if (!assignment.published) {
-    return (
-      <div className="panel">
-        <p className="notice">シフトはまだ確定していません。確定するとここに表示されます。</p>
-        <h2 className="h2">登録状況</h2>
-        {config.days.map((day) => (
-          <div key={day.id} className="scroll">
-            <table className="tbl">
-              <caption>{dayTitle(day)}</caption>
-              <thead>
-                <tr><th>時間</th><th className="num">○</th><th className="num">△</th></tr>
-              </thead>
-              <tbody>
-                {day.slots.map((s) => {
-                  const k = slotKey(day.id, s.id);
-                  const ok = entries.filter((e) => e.avail[k] === 'ok').length;
-                  const maybe = entries.filter((e) => e.avail[k] === 'maybe').length;
-                  return (
-                    <tr key={s.id}>
-                      <td className="nowrap">{s.name && <Koma>{s.name}</Koma>} {slotTime(s)}</td>
-                      <td className="num ok-text">{ok}</td>
-                      <td className="num maybe-text">{maybe}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   const mine = meEntry
     ? allSlots(config).filter((ref) => slotStatus(config, assignment, ref, valid).some((r) => r.ids.includes(meEntry.id)))
     : [];

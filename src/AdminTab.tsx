@@ -43,11 +43,6 @@ export function AdminTab(props: TabProps) {
     try { await saveAssignment(a); return true; } catch { toast(FAIL); reload(); return false; }
   };
 
-  const togglePublish = async () => {
-    const published = !assignment.published;
-    if (await saveAsg({ ...assignment, published })) toast(published ? 'シフト表を公開しました' : '公開を取り消しました');
-  };
-
   const clearAll = async () => {
     setConfirmClear(false);
     if (await saveAsg({ ...assignment, map: {} })) toast('割当をすべて消しました');
@@ -69,17 +64,13 @@ export function AdminTab(props: TabProps) {
   return (
     <div className="panel">
       <section className="card">
-        <div className="row between">
-          <h2 className="h2 flush">概要</h2>
-          <span className={assignment.published ? 'pill ok' : 'pill'}>{assignment.published ? '公開中' : '未公開'}</span>
-        </div>
+        <h2 className="h2 flush">概要</h2>
         <div className="stats">
           <div><b>{entries.length}</b><span>登録メンバー</span></div>
           <div><b>{filledTotal} / {needTotal}</b><span>必要人数の充足</span></div>
           <div><b className={shortSlots ? 'short-text' : ''}>{shortSlots}</b><span>人が足りないコマ</span></div>
         </div>
         <div className="btns">
-          <button className="btn primary" onClick={togglePublish}>{assignment.published ? '公開を取り消す' : 'シフト表を公開'}</button>
           <button className="btn" onClick={download}>シフト表をダウンロード(Excel)</button>
           <button className="btn danger" onClick={() => setConfirmClear(true)}>割当をすべてクリア</button>
         </div>
