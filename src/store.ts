@@ -82,11 +82,6 @@ export async function saveEntries(entries: Entry[]) {
   check(await sb.from('entries').upsert(entries.map(toRow)));
 }
 
-export async function deleteEntry(id: string) {
-  if (!sb) return localWrite((d) => { d.entries = d.entries.filter((e) => e.id !== id); });
-  check(await sb.from('entries').delete().eq('id', id));
-}
-
 export async function findEntryByName(name: string): Promise<Entry | null> {
   if (!sb) return localRead().entries.find((e) => e.name === name) ?? null;
   const row = check(await sb.from('entries').select('*').eq('name', name).maybeSingle()) as EntryRow | null;

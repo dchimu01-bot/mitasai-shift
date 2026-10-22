@@ -1,18 +1,16 @@
 import { useEffect, useState } from 'react';
 import type { TabProps } from './App';
 import {
-  allSlots, autoAssign, candidateOrder, countAssigned, fmtDate, fmtTime, isWork, now,
+  allSlots, candidateOrder, countAssigned, fmtDate, isWork, now,
   parseMembers, slotIds, slotKey, slotRoles, slotStatus, slotTime, stdNeed, uid,
 } from './logic';
 import { downloadShiftXlsx } from './exportXlsx';
 import { Koma, MARK_TEXT } from './parts';
-import { deleteEntry, saveAssignment, saveConfig, saveEntries } from './store';
+import { saveAssignment, saveConfig, saveEntries } from './store';
 import type { Assignment, Config, Day, Slot } from './types';
 
 const SECTIONS = [
-  { id: 'matrix', label: '一覧で割当' },
   { id: 'assign', label: '枠ごとに割当' },
-  { id: 'members', label: 'メンバー' },
   { id: 'settings', label: '日程・時間枠・人数' },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]['id'];
@@ -22,7 +20,7 @@ const FAIL = '保存できませんでした。もう一度お試しください
 export function AdminTab(props: TabProps) {
   const { data, patch, toast, reload } = props;
   const { config, entries, assignment } = data;
-  const [section, setSection] = useState<SectionId>('matrix');
+  const [section, setSection] = useState<SectionId>('assign');
   const [confirmClear, setConfirmClear] = useState(false);
 
   const valid = new Set(entries.map((e) => e.id));
@@ -43,11 +41,6 @@ export function AdminTab(props: TabProps) {
     const a = { ...next, updatedAt: now() };
     patch({ assignment: a });
     try { await saveAssignment(a); return true; } catch { toast(FAIL); reload(); return false; }
-  };
-
-  const runAuto = async () => {
-    const { map, added } = autoAssign(config, entries, assignment);
-    if (await saveAsg({ ...assignment, map })) toast(`${added}件を割り当てました`);
   };
 
   const togglePublish = async () => {
@@ -86,8 +79,7 @@ export function AdminTab(props: TabProps) {
           <div><b className={shortSlots ? 'short-text' : ''}>{shortSlots}</b><span>人が足りないコマ</span></div>
         </div>
         <div className="btns">
-          <button className="btn primary" onClick={runAuto}>空きを自動で埋める</button>
-          <button className="btn" onClick={togglePublish}>{assignment.published ? '公開を取り消す' : 'シフト表を公開'}</button>
+          <button className="btn primary" onClick={togglePublish}>{assignment.published ? '公開を取り消す' : 'シフト表を公開'}</button>
           <button className="btn" onClick={download}>シフト表をダウンロード(Excel)</button>
           <button className="btn danger" onClick={() => setConfirmClear(true)}>割当をすべてクリア</button>
         </div>
@@ -98,7 +90,6 @@ export function AdminTab(props: TabProps) {
             <button className="btn" onClick={() => setConfirmClear(false)}>やめる</button>
           </div>
         )}
-        <p className="small muted">自動割当は ○ の人を優先し、担当コマ数が少ない人から順に入れます。すでに入っている割当は変えません。</p>
       </section>
 
       <nav className="subtabs">
@@ -107,107 +98,13 @@ export function AdminTab(props: TabProps) {
         ))}
       </nav>
 
-      {section === 'matrix' && <MatrixSection {...props} saveAsg={saveAsg} />}
       {section === 'assign' && <AssignSection {...props} saveAsg={saveAsg} saveCfg={saveCfg} />}
-      {section === 'members' && <MembersSection {...props} saveAsg={saveAsg} />}
       {section === 'settings' && <SettingsSection {...props} />}
     </div>
   );
 }
 
 type SaveAsg = (a: Omit<Assignment, 'updatedAt'>) => Promise<boolean>;
-
-// ---------------- 一覧で割当(人 × 枠) ----------------
-function MatrixSection({ data, saveAsg }: TabProps & { saveAsg: SaveAsg }) {
-  const { config, entries, assignment } = data;
-  const valid = new Set(entries.map((e) => e.id));
-  const counts = countAssigned(config, assignment, entries);
-  const refs = allSlots(config);
-
-  // 名簿の順に並べ、名簿にない人は後ろへ
-  const order = (n: string) => {
-    const i = config.members.indexOf(n);
-    return i < 0 ? Infinity : i;
-  };
-  const rows = [...entries].sort((x, y) => order(x.name) - order(y.name));
-
-  const toggle = (key: string, entryId: string) => {
-    const ref = refs.find((r) => r.key === key)!;
-    const slotMap = { ...assignment.map[key] };
-    if (slotIds(assignment, key, valid).includes(entryId)) {
-      for (const r of Object.keys(slotMap)) slotMap[r] = slotMap[r].filter((x) => x !== entryId);
-    } else {
-      const sts = slotStatus(config, assignment, ref, valid);
-      const target = sts.find((r) => r.short > 0) ?? sts[0];
-      if (!target) return;
-      slotMap[target.role.id] = [...target.ids, entryId];
-    }
-    saveAsg({ ...assignment, map: { ...assignment.map, [key]: slotMap } });
-  };
-
-  if (!entries.length) return <p className="muted">まだ誰も登録していません。</p>;
-
-  return (
-    <section>
-      <p className="small muted">
-        ○△のマスをタップすると割り当て、もう一度タップすると外します。<span className="mx-sample on">○</span> が割当済み、<span className="mx-sample bad">!</span> は ○△ を付けていないのに割り当てられている枠です。
-      </p>
-      <div className="scroll matrix-wrap">
-        <table className="matrix">
-          <thead>
-            <tr>
-              <th rowSpan={3} className="mx-name">名前</th>
-              {config.days.map((d) => d.slots.length > 0 && (
-                <th key={d.id} colSpan={d.slots.length} className="mx-day">{fmtDate(d.date)}</th>
-              ))}
-              <th rowSpan={3} className="mx-count">担当</th>
-            </tr>
-            <tr>
-              {refs.map(({ slot, key }) => (
-                <th key={key} className="mx-slot">
-                  {slot.name ? <span className="mx-work">{slot.name}</span> : <>{fmtTime(slot.start)}<br />{fmtTime(slot.end)}</>}
-                </th>
-              ))}
-            </tr>
-            <tr>
-              {refs.map((ref) => {
-                const sts = slotStatus(config, assignment, ref, valid);
-                const got = sts.reduce((n, r) => n + r.ids.length, 0);
-                const need = sts.reduce((n, r) => n + r.role.need, 0);
-                return <th key={ref.key} className={got >= need ? 'mx-fill ok' : 'mx-fill short'}>{got}/{need}</th>;
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((e) => (
-              <tr key={e.id}>
-                <th className="mx-name">{e.name}</th>
-                {refs.map(({ key, slot }) => {
-                  const m = e.avail[key];
-                  const on = slotIds(assignment, key, valid).includes(e.id);
-                  return (
-                    <td key={key} className="mx-td">
-                      <button
-                        className={`mx-cell ${m ?? 'none'}${on ? ' on' : ''}`}
-                        disabled={!m && !on}
-                        aria-pressed={on}
-                        aria-label={`${e.name} ${slotTime(slot)}`}
-                        onClick={() => toggle(key, e.id)}
-                      >
-                        {m ? MARK_TEXT[m] : on ? '!' : ''}
-                      </button>
-                    </td>
-                  );
-                })}
-                <td className="mx-count num">{counts[e.id]}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
 
 // ---------------- 割当 ----------------
 function AssignSection({ data, saveAsg, saveCfg }: TabProps & { saveAsg: SaveAsg; saveCfg: (c: Config) => Promise<boolean> }) {
@@ -306,74 +203,6 @@ function AssignSection({ data, saveAsg, saveCfg }: TabProps & { saveAsg: SaveAsg
           </div>
         );
       })}
-    </section>
-  );
-}
-
-// ---------------- メンバー ----------------
-function MembersSection({ data, patch, toast, reload, saveAsg }: TabProps & { saveAsg: SaveAsg }) {
-  const { config, entries, assignment } = data;
-  const [confirmId, setConfirmId] = useState('');
-  const counts = countAssigned(config, assignment, entries);
-  const registered = new Set(entries.map((e) => e.name));
-  const unregistered = config.members.filter((n) => !registered.has(n));
-
-  const remove = async (id: string) => {
-    setConfirmId('');
-    const name = entries.find((e) => e.id === id)?.name;
-    try {
-      await deleteEntry(id);
-    } catch {
-      toast('削除できませんでした');
-      return reload();
-    }
-    patch((d) => ({ entries: d.entries.filter((e) => e.id !== id) }));
-    const map: Assignment['map'] = {};
-    for (const [k, roles] of Object.entries(assignment.map)) {
-      map[k] = Object.fromEntries(Object.entries(roles).map(([r, ids]) => [r, ids.filter((x) => x !== id)]));
-    }
-    await saveAsg({ ...assignment, map });
-    toast(`${name}さんを削除しました`);
-  };
-
-  return (
-    <section className="card">
-      <p className="small">
-        <b>未登録({unregistered.length}人):</b>
-        {unregistered.length ? unregistered.join('、') : 'なし'}
-      </p>
-      <div className="scroll">
-        <table className="tbl">
-          <thead>
-            <tr><th>名前</th><th className="num">○</th><th className="num">△</th><th className="num">担当</th><th>操作</th></tr>
-          </thead>
-          <tbody>
-            {entries.map((e) => {
-              const v = Object.values(e.avail);
-              return (
-                <tr key={e.id}>
-                  <td className="nowrap">{e.name}</td>
-                  <td className="num ok-text">{v.filter((m) => m === 'ok').length}</td>
-                  <td className="num maybe-text">{v.filter((m) => m === 'maybe').length}</td>
-                  <td className="num">{counts[e.id]}</td>
-                  <td className="nowrap">
-                    {confirmId === e.id ? (
-                      <span className="confirm inline">
-                        削除しますか?
-                        <button className="btn mini danger" onClick={() => remove(e.id)}>削除</button>
-                        <button className="btn mini" onClick={() => setConfirmId('')}>やめる</button>
-                      </span>
-                    ) : (
-                      <button className="link danger-text" onClick={() => setConfirmId(e.id)}>削除</button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {!entries.length && <tr><td colSpan={5} className="muted">まだ誰も登録していません</td></tr>}
-          </tbody>
-        </table>
-      </div>
     </section>
   );
 }

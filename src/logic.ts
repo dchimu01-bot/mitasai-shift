@@ -98,31 +98,3 @@ export function candidateOrder(key: string, counts: Record<string, number>) {
     return ox - oy || (counts[x.id] ?? 0) - (counts[y.id] ?? 0) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0);
   };
 }
-
-// ---- 自動割当 ----
-export function autoAssign(c: Config, entries: Entry[], a: Assignment) {
-  const valid = new Set(entries.map((e) => e.id));
-  const counts = countAssigned(c, a, entries);
-  const map: Assignment['map'] = JSON.parse(JSON.stringify(a.map));
-  let added = 0;
-
-  const refs = allSlots(c)
-    .map((ref) => ({ ref, cands: entries.filter((e) => e.avail[ref.key]) }))
-    .sort((x, y) => x.cands.length - y.cands.length);
-
-  for (const { ref, cands } of refs) {
-    for (const role of slotRoles(c, ref.slot)) {
-      const slotMap = (map[ref.key] ??= {});
-      const list = (slotMap[role.id] = (slotMap[role.id] ?? []).filter((id) => valid.has(id)));
-      while (list.length < role.need) {
-        const inSlot = new Set(Object.values(slotMap).flat());
-        const pool = cands.filter((e) => !inSlot.has(e.id)).sort(candidateOrder(ref.key, counts));
-        if (!pool.length) break;
-        list.push(pool[0].id);
-        counts[pool[0].id]++;
-        added++;
-      }
-    }
-  }
-  return { map, added };
-}
